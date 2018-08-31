@@ -1,0 +1,201 @@
+WEB服务器上：
+YUM安装subversion软件
+yum -y install subversion
+rpm -q subversion
+创建版本库
+mkdir /var/svn/ 
+svnadmin create /var/svn/project
+ls /var/svn/project/
+conf/  db/  format  hooks/  locks/  README.txt
+
+本地导入初始化数据
+cd /usr/lib/systemd/system/ 
+svn import . file:///var/svn/project/ -m "Init Data"
+
+4）修改配置文件，创建账户与密码
+vim /var/svn/project/conf/svnserve.conf
+anon-access = none
+//19行，匿名无任何权限
+auth-access = write
+//20行，有效账户可写
+
+vim /var/svn/project/conf/passwd 
+[users]
+harry = 123456
+//用户名和密码
+tom = 123456
+//用户名和密码
+
+cat /var/svn/project/conf/authz 
+[/]                           //定义ACL访问控制
+harry = rw           //用户对项目根路径可读可写
+tom = rw
+启动服务 svnserve -d  -r /var/svn/project
+
+将服务器上的代码下载到本地
+cd /tmp
+svn --username harry --password 123456 co svn://192.168.2.100/ code
+/建立本地副本,从服务器192.168.2.100上co下载代码到本地code目录
+//用户名harry,密码123456
+
+cd /tmp/code
+ls
+svn ci -m "modify user"        //将本地修改的数据同步到服务器
+svn update                    //将服务器上新的数据同步到本地
+svn info     svn://192.168.2.100    //查看版本仓库基本信息
+svn log     svn://192.168.2.100    //查看版本仓库的日志
+
+echo "test" > test.sh        //本地新建一个文件
+svn ci -m "new file"            //提交失败，该文件不被svn管理
+svn add test.sh                //将文件或目录加入版本控制
+svn ci -m "new file"            //再次提交，成功
+
+svn diff                     //查看所有文件的差异
+svn diff umount.target        //仅查看某一个文件的差异
+svn cat svn://192.168.2.100/reboot.target    //查看服务器文件的内容
+svn revert tmp.mount             //还原tmp.mount文件
+rm -rf  *.target                //任意删除若干文件
+svn update                     //还原
+svn merge -r7:2    tuned.service      /将文件从版本7还原到版本2
+
+add 			添加文件
+commit（ci）		提交更新
+checkout（co）	检出代码
+cat			查看代码内容
+del			删除
+diff			文件对比
+import		导入代码
+info			查看版本信息
+list			查看文件列表
+log			查看版本历史
+update		更新
+mkdir			创建目录
+
+#####################################################################################
+使用Subversion协同工作
+多人协同工作（WEB1 ， WEB2)
+到/tmp  svn --usernametom --password 123456 co svn://192.168.2.100/code
+
+ 1，harry和tom修改不同的文件
+WEB1提交  版本变成2
+WEB2提交  版本自己合成新版本3
+WEB1update就是版本3
+
+2，harry和tom修改相同文件的不同行
+web1提交。版本更新为4
+web2提交，提交失败，提示过期，需要先update成版本4，然后重新提交，版本5
+
+3，harry和tom修改相同文件的相同行
+web1提交，版本变成6
+web2提交失败，update出现冲突，需要解决，标记p。
+ls  
+帮自己的tunde.server.mine 覆盖改名为tunde.server
+删除其余的之后提交
+解决冲突
+##################################################################################
+使用dump指令备份版本库数据
+svnadmin dump /var/svn/project > project.bak  //备份
+svnadmin create /var/svn/project2               //新建空仓库
+svnadmin load /var/svn/project2 < project.bak      //还原
+
+################################################################################
+制作nginx的RPM包
+安装rpm-build软件包
+生成rpmbuild目录结构
+rpmbuild -ba nginx.spec                //会报错，没有文件或目录
+ls /root/rpmbuild
+BUILD  BUILDROOT  RPMS  SOURCES  SPECS  SRPMS
+准备工作，将源码软件复制到SOURCES目录
+cp nginx-1.12.2.tar.gz /root/rpmbuild/SOURCES/
+
+创建并修改SPEC配置文件
+vim /root/rpmbuild/SPECS/nginx.spec 
+Name:nginx        
+Version:1.12.2
+Release:    10
+Summary: Nginx is a web server software.    
+License:GPL    
+URL:    www.test.com    
+Source0:nginx-1.12.2.tar.gz
+#BuildRequires:    
+#Requires:    
+%description
+nginx [engine x] is an HTTP and reverse proxy server.
+%prep
+%setup –q                            //自动解压源码包，并cd进入目录
+%build
+./configure       //可以添加模块
+make %{?_smp_mflags}
+%install
+make install DESTDIR=%{buildroot}
+cp /root/rpmbuild/SPECS/nginx.sh %{buildroot}/usr/local/nginx/    
+##注意，cp非必须操作，注意，这里是将一个脚本拷贝到安装目录，必须提前准备该文件
+%files
+%doc
+/usr/local/nginx/*            //对哪些文件与目录打包
+%changelog
+
+安装依赖软件包
+ yum -y install  gcc  pcre-devel zlib-devel openssl-devel
+
+rpmbuild创建RPM软件包
+ rpmbuild -ba /root/rpmbuild/SPECS/nginx.spec
+ ls /root/rpmbuild/RPMS/x86_64/nginx-1.12.2-10.x86_64.rpm
+ rpm -qpi RPMS/x86_64/nginx-1.12.2-10.x86_64.rpm 
+
+
+安装、卸载软件
+rpm -ivh RPMS/x86_64/nginx-1.12.2-10.x86_64.rpm 
+ rpm -qa |grep nginx
+ /usr/local/nginx/sbin/nginx
+ curl http://127.0.0.1/
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

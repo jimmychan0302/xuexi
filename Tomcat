@@ -1,0 +1,311 @@
+安装部署Tomcat服务器
+使用RPM安装JDK环境
+yum –y install  java-1.8.0-openjdk                //安装JDK
+yum -y install java-1.8.0-openjdk-headless        //安装JDK
+java -version                                    //查看JAVA版本
+
+安装Tomcat（apache-tomcat-8.0.30.tar.gz软件包，在lnmp_soft中有提供
+ tar -xf  apache-tomcat-8.0.30.tar.gz
+mv apache-tomcat-8.0.30  /usr/local/tomcat
+启动服务
+usr/local/tomcat/bin/startup.sh
+netstat -nutlp |grep java        //查看java监听的端口
+测试
+
+创建测试JSP页面
+ vim  /usr/local/tomcat/webapps/ROOT/test.jsp
+<html>
+<body>
+<center>
+Now time is: <%=new java.util.Date()%>            //显示服务器当前时间
+</center>
+</body>
+</html>
+重启
+/usr/local/tomcat/bin/shutdown.sh
+/usr/local/tomcat/bin/startup.sh
+客户端测试
+
+######################################################################################
+使用Tomcat部署虚拟主机
+修改server.xml配置文件/usr/local/tomcat/conf/server.xml
+<Server>
+   <Service>
+     <Connector port=8080 />
+     <Connector port=8009 />
+     <Engine name="Catalina" defaultHost="localhost">
+<Host name="www.a.com" appBase="a" unpackWARS="true" autoDeploy="true">
+</Host>
+<Host name="www.b.com" appBase="b" unpackWARS="true" autoDeploy="true">
+</Host>
+创建虚拟主机对应的页面根路径
+mkdir -p  /usr/local/tomcat/{a,b}/ROOT
+echo "AAA"   > /usr/local/tomcat/a/ROOT/index.html
+echo "BBB" > /usr/local/tomcat/b/ROOT/index.html
+重启usr/local/tomcat/bin/shutdown.sh startup.sh
+客户端访问
+vim /etc/hosts
+192.168.2.100  www.a.com www.b.com
+firefox http://www.a.com:8080    //注意加8080
+
+修改www.b.com网站的首页目录为base
+修改默认网站首页路径
+添加一行 
+<Context path="" docBase="base" reloadable="true"/>
+
+echo "BASE" > /usr/local/tomcat/b/base/index.html
+//在b目录下找base，没有就找ROOT
+重启
+测试
+
+跳转
+当用户访问http://www.a.com/test打开/var/www/html目录下的页面
+修改配置/usr/local/tomcat/conf/server.xml
+添加一行
+<Context path="/test" docBase="/var/www/html/" />
+如果后面加/test，就去/var/www/html找页面
+
+echo "Test" > /var/www/html/index.htm
+重启
+测试root@client ~]# firefox http://www.a.com:8080/test    
+
+#######################################################################################
+配置Tomcat支持SSL加密网站
+keytool -genkeypair -alias tomcat -keyalg RSA -keystore /usr/local/tomcat/keystore                //提示输入密码为:123456
+//-genkeypair     生成密钥对
+//-alias tomcat     密钥别名
+//-keyalg RSA     定义密钥算法为RSA算法
+//-keystore         定义密钥文件存储在:/usr/local/tomcat/keystore
+
+修改server.xml
+<Connector port="8443" protocol="org.apache.coyote.http11.Http11NioProtocol"
+ maxThreads="150" SSLEnabled="true" scheme="https" secure="true"
+ keystoreFile="/usr/local/tomcat/keystore" keystorePass="123456"         clientAuth="false" sslProtocol="TLS" />
+//备注，默认这段Connector被注释掉了，打开注释，添加密钥信息即可
+重启
+[root@client ~]# firefox https://www.a.com:8443/
+[root@client ~]# firefox https://www.b.com:8443/
+[root@client ~]# firefox https://192.168.2.100:8443
+
+######################################################################################
+配置Tomcat日志
+vim /usr/local/tomcat/conf/server.xml
+
+<Host name="www.a.com" appBase="a" unpackWARS="true" autoDeploy="true">
+<Context path="/test" docBase="/var/www/html/" />
+#从默认localhost虚拟主机中把Valve这段复制过来，适当修改下即可
+<Valve className="org.apache.catalina.valves.AccessLogValve" directory="logs"
+               prefix=" a_access" suffix=".txt"
+               pattern="%h %l %u %t &quot;%r&quot; %s %b" />
+</Host>
+重启
+查看日志ls /usr/local/tomcat/logs/
+
+##################################################################################
+
+扩展实验(配置Tomcat集群)
+
+1) 在192.168.4.5主机上配置Nginx调度器
+http{
+    upstream toms {
+        server 192.168.2.100:8080;
+        server 192.168.2.200:8080;
+    }
+    server  {
+        listen 80;
+        server_name localhost;
+        location / {
+            proxy_pass  http://toms;
+
+ 在192.168.2.100和192.168.2.200主机上配置Tomcat调度器
+yum -y install  java-1.8.0-openjdk                //安装JDK
+yum -y install java-1.8.0-openjdk-headless        //安装JDK
+tar -xzf  apache-tomcat-8.0.30.tar.gz
+mv apache-tomcat-8.0.30  /usr/local/tomcat
+启动服务
+/usr/local/tomcat/bin/startup.sh
+
+######################################################################################
+使用Varnish加速Web（Varnish缓存服务器）
+
+[root@web1 ~]# yum  -y  install  httpd
+启用，生成页面/var/www/html/index.html
+
+客户机测试firefoxhttp：//192.168.2.100
+
+部署Varnish缓存服务器(192.168.4.5)
+编译安装软件(python-docutils默认光盘中没有，需要在lnmp_soft中找)
+
+yum -y install gcc readline-devel    //安装软件依赖包
+yum -y install ncurses-devel         //安装软件依赖包
+yum -y install pcre-devel            //安装软件依赖包
+yum -y install python-docutils-0.11-0.2.20130715svn7687.el7.noarch.rpm         //安装软件依赖包
+useradd -s /sbin/nologin varnish                //创建账户
+tar -xf varnish-5.2.1.tar.gz
+cd varnish-5.2.1
+./configure
+make && make install
+复制启动脚本及配置文件
+cp  etc/example.vcl   /usr/local/etc/default.vcl
+修改代理配置文件
+ vim  /usr/local/etc/default.vcl
+backend default {
+     .host = "192.168.2.100";
+     .port = "80";
+ }
+
+启动服务
+varnishd  -f /usr/local/etc/default.vcl
+//varnishd命令的其他选项说明如下：
+//varnishd –s malloc,128M        定义varnish使用内存作为缓存，空间为128M
+//varnishd –s file,/var/lib/varnish_storage.bin,1G 定义varnish使用文件作为缓存
+客户端测试
+查看varnish日志
+varnishlog                        //varnish日志
+varnishncsa                    //访问日志
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
